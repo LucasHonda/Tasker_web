@@ -144,8 +144,36 @@ const TaskForm = ({ task, onSubmit, onCancel }) => {
     reminder: task?.reminder ? new Date(task.reminder).toISOString().slice(0, 16) : ''
   });
 
-  const categories = ['General', 'Work', 'Personal', 'Health', 'Shopping', 'Finance'];
+  const [availableCategories, setAvailableCategories] = useState(['General', 'Work', 'Personal', 'Health', 'Shopping', 'Finance']);
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [newCategory, setNewCategory] = useState('');
   const priorities = ['Low', 'Medium', 'High'];
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await axios.get(`${API}/tasks/categories`);
+      const userCategories = response.data;
+      const defaultCategories = ['General', 'Work', 'Personal', 'Health', 'Shopping', 'Finance'];
+      const allCategories = [...new Set([...defaultCategories, ...userCategories])];
+      setAvailableCategories(allCategories);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
+  const handleAddCategory = () => {
+    if (newCategory.trim() && !availableCategories.includes(newCategory.trim())) {
+      const updatedCategories = [...availableCategories, newCategory.trim()];
+      setAvailableCategories(updatedCategories);
+      setFormData({...formData, category: newCategory.trim()});
+      setNewCategory('');
+      setShowNewCategory(false);
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
