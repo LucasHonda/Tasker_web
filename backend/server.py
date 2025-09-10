@@ -354,22 +354,38 @@ async def get_task_categories(current_user: UserSession = Depends(get_current_us
     categories = await db.tasks.aggregate(pipeline).to_list(100)
     return [cat["_id"] for cat in categories if cat["_id"]]
 
-# Mock Calendar Routes (since we're doing read-only for now)
+# Calendar Routes
 @api_router.get("/calendar/events", response_model=List[CalendarEvent])
 async def get_calendar_events(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    calendar_service = Depends(get_google_calendar_service),
     current_user: UserSession = Depends(get_current_user)
 ):
-    """Get calendar events (mock data for now)"""
-    # For now, return mock calendar events
-    # In a real implementation, this would integrate with Google Calendar API
+    """Get calendar events - Enhanced mock data with user context"""
     
+    # Parse date range if provided
+    start_dt = datetime.now(timezone.utc) - timedelta(days=1)  # Default: yesterday
+    end_dt = datetime.now(timezone.utc) + timedelta(days=30)   # Default: next 30 days
+    
+    if start_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+        except ValueError:
+            pass
+            
+    if end_date:
+        try:
+            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+        except ValueError:
+            pass
+    
+    # Enhanced mock events with more variety and user context
     mock_events = [
         {
             "id": "event_1",
-            "title": "Team Meeting",
-            "description": "Weekly team sync",
+            "title": f"Welcome Meeting - {current_user.name}",
+            "description": "Onboarding session and goal setting",
             "start_time": datetime.now(timezone.utc) + timedelta(hours=2),
             "end_time": datetime.now(timezone.utc) + timedelta(hours=3),
             "all_day": False,
@@ -378,27 +394,84 @@ async def get_calendar_events(
         },
         {
             "id": "event_2",
-            "title": "Project Deadline",
-            "description": "Submit final project deliverables",
-            "start_time": datetime.now(timezone.utc) + timedelta(days=3),
-            "end_time": datetime.now(timezone.utc) + timedelta(days=3, hours=1),
-            "all_day": True,
-            "location": "",
+            "title": "Project Planning Session",
+            "description": "Quarterly planning and resource allocation",
+            "start_time": datetime.now(timezone.utc) + timedelta(days=1, hours=10),
+            "end_time": datetime.now(timezone.utc) + timedelta(days=1, hours=12),
+            "all_day": False,
+            "location": "Meeting Room B",
             "calendar_id": "primary"
         },
         {
             "id": "event_3",
+            "title": "All Hands Meeting",
+            "description": "Company-wide updates and announcements",
+            "start_time": datetime.now(timezone.utc) + timedelta(days=3),
+            "end_time": datetime.now(timezone.utc) + timedelta(days=3, hours=1),
+            "all_day": True,
+            "location": "Main Auditorium",
+            "calendar_id": "primary"
+        },
+        {
+            "id": "event_4",
             "title": "Client Presentation",
-            "description": "Present project proposal to client",
-            "start_time": datetime.now(timezone.utc) + timedelta(days=7, hours=10),
-            "end_time": datetime.now(timezone.utc) + timedelta(days=7, hours=11),
+            "description": "Present project proposal and deliverables",
+            "start_time": datetime.now(timezone.utc) + timedelta(days=5, hours=14),
+            "end_time": datetime.now(timezone.utc) + timedelta(days=5, hours=15, minutes=30),
             "all_day": False,
-            "location": "Client Office",
+            "location": "Client Office - Downtown",
+            "calendar_id": "primary"
+        },
+        {
+            "id": "event_5",
+            "title": "Team Building Workshop",
+            "description": "Interactive team building and collaboration exercises",
+            "start_time": datetime.now(timezone.utc) + timedelta(days=8, hours=9),
+            "end_time": datetime.now(timezone.utc) + timedelta(days=8, hours=17),
+            "all_day": False,
+            "location": "Offsite Location",
+            "calendar_id": "primary"
+        },
+        {
+            "id": "event_6",
+            "title": "Performance Review",
+            "description": f"Quarterly review session with {current_user.name}",
+            "start_time": datetime.now(timezone.utc) + timedelta(days=10, hours=15),
+            "end_time": datetime.now(timezone.utc) + timedelta(days=10, hours=16),
+            "all_day": False,
+            "location": "Manager's Office",
+            "calendar_id": "primary"
+        },
+        {
+            "id": "event_7",
+            "title": "Training Workshop",
+            "description": "Professional development and skill enhancement",
+            "start_time": datetime.now(timezone.utc) + timedelta(days=12, hours=13),
+            "end_time": datetime.now(timezone.utc) + timedelta(days=12, hours=17),
+            "all_day": False,
+            "location": "Training Center",
+            "calendar_id": "primary"
+        },
+        {
+            "id": "event_8",
+            "title": "Monthly Standup",
+            "description": "Progress updates and roadmap discussion",
+            "start_time": datetime.now(timezone.utc) + timedelta(days=15, hours=10),
+            "end_time": datetime.now(timezone.utc) + timedelta(days=15, hours=11),
+            "all_day": False,
+            "location": "Virtual Meeting",
             "calendar_id": "primary"
         }
     ]
     
-    return [CalendarEvent(**event) for event in mock_events]
+    # Filter events by date range
+    filtered_events = []
+    for event in mock_events:
+        event_start = event["start_time"]
+        if start_dt <= event_start <= end_dt:
+            filtered_events.append(event)
+    
+    return [CalendarEvent(**event) for event in filtered_events]
 
 # Dashboard/Summary Routes
 @api_router.get("/dashboard/summary")
