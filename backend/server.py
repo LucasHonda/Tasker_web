@@ -13,6 +13,10 @@ import httpx
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi import Cookie
 import json
+from googleapiclient.discovery import build
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request as GoogleRequest
+import asyncio
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
