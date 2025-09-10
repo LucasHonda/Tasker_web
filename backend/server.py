@@ -112,13 +112,7 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Invalid session token")
     
     # Check if session is expired
-    expires_at = user_doc["expires_at"]
-    if isinstance(expires_at, str):
-        expires_at = datetime.fromisoformat(expires_at)
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    
-    if expires_at < datetime.now(timezone.utc):
+    if user_doc["expires_at"] < datetime.now(timezone.utc):
         # Remove expired session
         await db.users.delete_one({"session_token": session_token})
         raise HTTPException(status_code=401, detail="Session expired")
@@ -129,6 +123,23 @@ async def get_current_user(
         name=user_doc["name"],
         picture=user_doc["picture"]
     )
+
+async def get_google_calendar_service(current_user: UserSession = Depends(get_current_user)):
+    """Get authenticated Google Calendar service for the current user"""
+    try:
+        # Get user's stored session token to fetch Google credentials
+        user_doc = await db.users.find_one({"id": current_user.user_id})
+        if not user_doc or not user_doc.get("session_token"):
+            raise HTTPException(status_code=401, detail="No valid session found")
+        
+        # For now, we'll simulate Google Calendar access
+        # In a real implementation, we would exchange the Emergent session for Google OAuth tokens
+        # This is a placeholder that returns mock data structure
+        return {"user_email": current_user.email, "authenticated": True}
+        
+    except Exception as e:
+        logging.error(f"Failed to get Google Calendar service: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to access calendar service")
 
 # Basic Routes
 @api_router.get("/")
