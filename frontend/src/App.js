@@ -607,12 +607,27 @@ const Dashboard = () => {
   const [calendarViewType, setCalendarViewType] = useState('grid');
   const [activeTab, setActiveTab] = useState('dashboard');
   const [summary, setSummary] = useState(null);
+  const [availableCategories, setAvailableCategories] = useState([]);
 
   useEffect(() => {
     fetchTasks();
     fetchEvents();
     fetchSummary();
+    fetchCategories();
   }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await axios.get(`${API}/tasks/categories`);
+      const userCategories = response.data;
+      const defaultCategories = ['General', 'Work', 'Personal', 'Health', 'Shopping', 'Finance'];
+      const allCategories = [...new Set([...defaultCategories, ...userCategories])];
+      setAvailableCategories(allCategories);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      setAvailableCategories(['General', 'Work', 'Personal', 'Health', 'Shopping', 'Finance']);
+    }
+  };
 
   const fetchTasks = async () => {
     try {
