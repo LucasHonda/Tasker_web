@@ -1,34 +1,460 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+/* Custom styles for Calendar & Task Manager */
+
+.App {
+  text-align: left;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
 }
 
-.App-link {
-    color: #61dafb;
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Custom animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.task-item {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Custom focus styles */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
+}
+
+/* Calendar grid styling */
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  background-color: #e5e7eb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.calendar-cell {
+  background-color: white;
+  min-height: 120px;
+  padding: 8px;
+  position: relative;
+}
+
+.calendar-cell:hover {
+  background-color: #f8fafc;
+}
+
+.calendar-cell.today {
+  background-color: #eff6ff;
+}
+
+.calendar-cell.selected {
+  background-color: #dbeafe;
+  border: 2px solid #3b82f6;
+}
+
+.calendar-cell.other-month {
+  background-color: #f9fafb;
+  color: #9ca3af;
+}
+
+/* Event indicators */
+.event-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 4px;
+}
+
+.event-indicator.work {
+  background-color: #3b82f6;
+}
+
+.event-indicator.personal {
+  background-color: #10b981;
+}
+
+.event-indicator.health {
+  background-color: #f59e0b;
+}
+
+.event-indicator.other {
+  background-color: #8b5cf6;
+}
+
+/* Task priority indicators */
+.priority-high {
+  border-left: 4px solid #ef4444;
+}
+
+.priority-medium {
+  border-left: 4px solid #f59e0b;
+}
+
+.priority-low {
+  border-left: 4px solid #10b981;
+}
+
+/* Responsive design improvements */
+@media (max-width: 768px) {
+  .calendar-cell {
+    min-height: 80px;
+    padding: 4px;
+  }
+  
+  .calendar-cell .event-item {
+    font-size: 0.75rem;
+    padding: 1px 4px;
+  }
+}
+
+/* Custom button styles */
+.btn-primary {
+  @apply bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+}
+
+.btn-secondary {
+  @apply bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+}
+
+.btn-danger {
+  @apply bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+}
+
+/* Form styles */
+.form-input {
+  @apply w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-200;
+}
+
+.form-select {
+  @apply w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-200 bg-white;
+}
+
+.form-textarea {
+  @apply w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-200 resize-vertical min-h-20;
+}
+
+/* Modal overlay */
+.modal-overlay {
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+/* Card styles */
+.card {
+  @apply bg-white rounded-lg border border-gray-200 p-6 shadow-sm hover:shadow-md transition-shadow duration-200;
+}
+
+.card-header {
+  @apply border-b border-gray-200 pb-4 mb-4;
+}
+
+/* Loading animation */
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Status indicators */
+.status-online {
+  @apply w-3 h-3 bg-green-500 rounded-full;
+}
+
+.status-offline {
+  @apply w-3 h-3 bg-gray-400 rounded-full;
+}
+
+.status-busy {
+  @apply w-3 h-3 bg-red-500 rounded-full;
+}
+
+/* Notification styles */
+.notification {
+  @apply fixed top-4 right-4 bg-white border border-gray-200 rounded-lg shadow-lg p-4 max-w-sm z-50;
+  animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.notification.success {
+  @apply border-green-200 bg-green-50;
+}
+
+.notification.error {
+  @apply border-red-200 bg-red-50;
+}
+
+.notification.warning {
+  @apply border-yellow-200 bg-yellow-50;
+}
+
+.notification.info {
+  @apply border-blue-200 bg-blue-50;
+}
+
+/* Utility classes */
+.text-truncate {
+  @apply truncate;
+}
+
+.shadow-custom {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.gradient-bg {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+/* Dark mode support (if needed later) */
+@media (prefers-color-scheme: dark) {
+  .dark-mode {
+    @apply bg-gray-900 text-white;
+  }
+  
+  .dark-mode .card {
+    @apply bg-gray-800 border-gray-700;
+  }
+  
+  .dark-mode .form-input {
+    @apply bg-gray-800 border-gray-600 text-white;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  .print-only {
+    display: block !important;
+  }
+}
+
+/* Accessibility improvements */
+.sr-only {
+  @apply absolute w-px h-px p-0 -m-px overflow-hidden clip-rect(0, 0, 0, 0) whitespace-nowrap border-0;
+}
+
+/* Focus visible for better keyboard navigation */
+.focus-visible:focus {
+  @apply outline-none ring-2 ring-blue-500 ring-offset-2;
+}
+
+/* Custom checkbox and radio styles */
+.custom-checkbox {
+  @apply appearance-none w-5 h-5 border-2 border-gray-300 rounded checked:bg-blue-500 checked:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
+}
+
+.custom-radio {
+  @apply appearance-none w-5 h-5 border-2 border-gray-300 rounded-full checked:bg-blue-500 checked:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2;
+}
+
+/* Enhanced hover effects */
+.hover-lift {
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+/* Calendar specific enhancements */
+.calendar-day {
+  @apply relative cursor-pointer p-2 text-center transition-colors duration-200;
+}
+
+.calendar-day:hover {
+  @apply bg-blue-50;
+}
+
+.calendar-day.today {
+  @apply bg-blue-500 text-white rounded-full;
+}
+
+.calendar-day.selected {
+  @apply bg-blue-100 text-blue-700 rounded-full;
+}
+
+.calendar-day.has-events::after {
+  content: '';
+  @apply absolute bottom-1 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-blue-500 rounded-full;
+}
+
+/* Task list enhancements */
+.task-list {
+  @apply space-y-2;
+}
+
+.task-item {
+  @apply p-4 bg-white border border-gray-200 rounded-lg hover:border-gray-300 transition-colors duration-200;
+}
+
+.task-item.completed {
+  @apply bg-gray-50 opacity-75;
+}
+
+.task-item.overdue {
+  @apply border-red-200 bg-red-50;
+}
+
+.task-item.due-soon {
+  @apply border-yellow-200 bg-yellow-50;
+}
+
+/* Responsive navigation */
+@media (max-width: 640px) {
+  .nav-mobile {
+    @apply fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-2;
+  }
+  
+  .nav-mobile .nav-item {
+    @apply flex-1 text-center py-2;
+  }
+}
+
+/* Enhanced form validation styles */
+.form-error {
+  @apply border-red-300 bg-red-50 focus:ring-red-500 focus:border-red-500;
+}
+
+.form-success {
+  @apply border-green-300 bg-green-50 focus:ring-green-500 focus:border-green-500;
+}
+
+.error-message {
+  @apply text-red-600 text-sm mt-1;
+}
+
+.success-message {
+  @apply text-green-600 text-sm mt-1;
+}
+
+/* Loading states */
+.skeleton {
+  @apply animate-pulse bg-gray-200 rounded;
+}
+
+.skeleton-text {
+  @apply h-4 bg-gray-200 rounded animate-pulse;
+}
+
+.skeleton-avatar {
+  @apply w-10 h-10 bg-gray-200 rounded-full animate-pulse;
+}
+
+/* Custom transitions */
+.transition-smooth {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.transition-bounce {
+  transition: transform 0.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* Badge styles */
+.badge {
+  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+}
+
+.badge-primary {
+  @apply bg-blue-100 text-blue-800;
+}
+
+.badge-success {
+  @apply bg-green-100 text-green-800;
+}
+
+.badge-warning {
+  @apply bg-yellow-100 text-yellow-800;
+}
+
+.badge-danger {
+  @apply bg-red-100 text-red-800;
+}
+
+.badge-gray {
+  @apply bg-gray-100 text-gray-800;
+}
+
+/* Progress indicators */
+.progress-bar {
+  @apply w-full bg-gray-200 rounded-full h-2;
+}
+
+.progress-fill {
+  @apply bg-blue-500 h-2 rounded-full transition-all duration-300 ease-out;
+}
+
+/* Enhanced spacing utilities */
+.space-y-relaxed > * + * {
+  margin-top: 1.5rem;
+}
+
+.space-x-relaxed > * + * {
+  margin-left: 1.5rem;
+}
+
+/* Custom scrollable areas */
+.scrollable {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 #f7fafc;
+}
+
+.scrollable::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollable::-webkit-scrollbar-track {
+  background: #f7fafc;
+}
+
+.scrollable::-webkit-scrollbar-thumb {
+  background-color: #cbd5e0;
+  border-radius: 3px;
+}
+
+.scrollable::-webkit-scrollbar-thumb:hover {
+  background-color: #a0aec0;
 }

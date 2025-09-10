@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -6,10 +6,13 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 import uuid
-from datetime import datetime
-
+from datetime import datetime, timezone, timedelta
+import httpx
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Cookie
+import json
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -20,37 +23,394 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
 # Create the main app without a prefix
-app = FastAPI()
+app = FastAPI(title="Calendar & Task Manager", version="1.0.0")
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
-
-# Define Models
-class StatusCheck(BaseModel):
+# Authentication Models
+class User(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    email: str
+    name: str
+    picture: str
+    session_token: str
+    expires_at: datetime
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-class StatusCheckCreate(BaseModel):
-    client_name: str
+class UserSession(BaseModel):
+    user_id: str
+    email: str
+    name: str
+    picture: str
 
-# Add your routes to the router instead of directly to app
-@api_router.get("/")
-async def root():
-    return {"message": "Hello World"}
+# Task Models
+class Task(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    title: str
+    description: Optional[str] = ""
+    category: Optional[str] = "General"
+    priority: Optional[str] = "Medium"  # Low, Medium, High
+    due_date: Optional[datetime] = None
+    reminder: Optional[datetime] = None
+    completed: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.dict()
-    status_obj = StatusCheck(**status_dict)
-    _ = await db.status_checks.insert_one(status_obj.dict())
-    return status_obj
+class TaskCreate(BaseModel):
+    title: str
+    description: Optional[str] = ""
+    category: Optional[str] = "General"
+    priority: Optional[str] = "Medium"
+    due_date: Optional[datetime] = None
+    reminder: Optional[datetime] = None
 
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    status_checks = await db.status_checks.find().to_list(1000)
-    return [StatusCheck(**status_check) for status_check in status_checks]
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    priority: Optional[str] = None
+    due_date: Optional[datetime] = None
+    reminder: Optional[datetime] = None
+    completed: Optional[bool] = None
+
+# Calendar Event Models
+class CalendarEvent(BaseModel):
+    id: str
+    title: str
+    description: Optional[str] = ""
+    start_time: datetime
+    end_time: datetime
+    all_day: bool = False
+    location: Optional[str] = ""
+    calendar_id: str
+
+# Authentication Helper Functions
+async def get_current_user(
+    request: Request,
+    authorization: Optional[str] = Cookie(None, alias="session_token")
+) -> UserSession:
+    session_token = authorization
+    
+    # Fallback to Authorization header if cookie not present
+    if not session_token:
+        auth_header = request.headers.get("authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            session_token = auth_header.split(" ")[1]
+    
+    if not session_token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    # Find user by session token
+    user_doc = await db.users.find_one({"session_token": session_token})
+    if not user_doc:
+        raise HTTPException(status_code=401, detail="Invalid session token")
+    
+    # Check if session is expired
+    if user_doc["expires_at"] < datetime.now(timezone.utc):
+        # Remove expired session
+        await db.users.delete_one({"session_token": session_token})
+        raise HTTPException(status_code=401, detail="Session expired")
+    
+    return UserSession(
+        user_id=user_doc["id"],
+        email=user_doc["email"],
+        name=user_doc["name"],
+        picture=user_doc["picture"]
+    )
+
+# Authentication Routes
+@api_router.post("/auth/session")
+async def process_session(request: Request, response: Response):
+    """Process session_id from Emergent Auth and create user session"""
+    try:
+        body = await request.json()
+        session_id = body.get("session_id")
+        
+        if not session_id:
+            raise HTTPException(status_code=400, detail="Session ID required")
+        
+        # Call Emergent Auth to get user data
+        async with httpx.AsyncClient() as client:
+            auth_response = await client.get(
+                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                headers={"X-Session-ID": session_id}
+            )
+            
+            if auth_response.status_code != 200:
+                raise HTTPException(status_code=400, detail="Invalid session ID")
+            
+            user_data = auth_response.json()
+        
+        # Check if user already exists
+        existing_user = await db.users.find_one({"email": user_data["email"]})
+        
+        if existing_user:
+            # Update session token and expiry
+            expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+            await db.users.update_one(
+                {"email": user_data["email"]},
+                {
+                    "$set": {
+                        "session_token": user_data["session_token"],
+                        "expires_at": expires_at
+                    }
+                }
+            )
+            user_id = existing_user["id"]
+        else:
+            # Create new user
+            expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+            user = User(
+                id=str(uuid.uuid4()),
+                email=user_data["email"],
+                name=user_data["name"],
+                picture=user_data["picture"],
+                session_token=user_data["session_token"],
+                expires_at=expires_at
+            )
+            await db.users.insert_one(user.dict())
+            user_id = user.id
+        
+        # Set httpOnly cookie
+        response.set_cookie(
+            key="session_token",
+            value=user_data["session_token"],
+            httponly=True,
+            secure=True,
+            samesite="none",
+            path="/",
+            max_age=7 * 24 * 60 * 60  # 7 days
+        )
+        
+        return {
+            "user_id": user_id,
+            "email": user_data["email"],
+            "name": user_data["name"],
+            "picture": user_data["picture"]
+        }
+        
+    except Exception as e:
+        logging.error(f"Session processing error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Session processing failed")
+
+@api_router.post("/auth/logout")
+async def logout(response: Response, current_user: UserSession = Depends(get_current_user)):
+    """Logout user and clear session"""
+    # Remove session from database
+    await db.users.delete_one({"id": current_user.user_id})
+    
+    # Clear cookie
+    response.delete_cookie(key="session_token", path="/")
+    
+    return {"message": "Logged out successfully"}
+
+@api_router.get("/auth/me")
+async def get_current_user_info(current_user: UserSession = Depends(get_current_user)):
+    """Get current user information"""
+    return current_user
+
+# Task Management Routes
+@api_router.post("/tasks", response_model=Task)
+async def create_task(
+    task_data: TaskCreate,
+    current_user: UserSession = Depends(get_current_user)
+):
+    """Create a new task"""
+    task = Task(
+        user_id=current_user.user_id,
+        **task_data.dict()
+    )
+    
+    task_dict = task.dict()
+    # Convert datetime objects to ISO strings for MongoDB
+    if task_dict.get('due_date'):
+        task_dict['due_date'] = task_dict['due_date'].isoformat()
+    if task_dict.get('reminder'):
+        task_dict['reminder'] = task_dict['reminder'].isoformat()
+    task_dict['created_at'] = task_dict['created_at'].isoformat()
+    task_dict['updated_at'] = task_dict['updated_at'].isoformat()
+    
+    await db.tasks.insert_one(task_dict)
+    return task
+
+@api_router.get("/tasks", response_model=List[Task])
+async def get_tasks(
+    category: Optional[str] = None,
+    completed: Optional[bool] = None,
+    current_user: UserSession = Depends(get_current_user)
+):
+    """Get tasks for current user"""
+    query = {"user_id": current_user.user_id}
+    
+    if category:
+        query["category"] = category
+    if completed is not None:
+        query["completed"] = completed
+    
+    tasks = await db.tasks.find(query).sort("created_at", -1).to_list(1000)
+    
+    # Convert ISO strings back to datetime objects
+    for task in tasks:
+        if task.get('due_date'):
+            task['due_date'] = datetime.fromisoformat(task['due_date'])
+        if task.get('reminder'):
+            task['reminder'] = datetime.fromisoformat(task['reminder'])
+        task['created_at'] = datetime.fromisoformat(task['created_at'])
+        task['updated_at'] = datetime.fromisoformat(task['updated_at'])
+    
+    return [Task(**task) for task in tasks]
+
+@api_router.put("/tasks/{task_id}", response_model=Task)
+async def update_task(
+    task_id: str,
+    task_update: TaskUpdate,
+    current_user: UserSession = Depends(get_current_user)
+):
+    """Update a task"""
+    # Check if task exists and belongs to user
+    existing_task = await db.tasks.find_one({"id": task_id, "user_id": current_user.user_id})
+    if not existing_task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    # Prepare update data
+    update_data = {k: v for k, v in task_update.dict().items() if v is not None}
+    if update_data:
+        update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+        
+        # Convert datetime objects to ISO strings
+        if 'due_date' in update_data and update_data['due_date']:
+            update_data['due_date'] = update_data['due_date'].isoformat()
+        if 'reminder' in update_data and update_data['reminder']:
+            update_data['reminder'] = update_data['reminder'].isoformat()
+        
+        await db.tasks.update_one(
+            {"id": task_id, "user_id": current_user.user_id},
+            {"$set": update_data}
+        )
+    
+    # Get updated task
+    updated_task = await db.tasks.find_one({"id": task_id})
+    
+    # Convert ISO strings back to datetime objects
+    if updated_task.get('due_date'):
+        updated_task['due_date'] = datetime.fromisoformat(updated_task['due_date'])
+    if updated_task.get('reminder'):
+        updated_task['reminder'] = datetime.fromisoformat(updated_task['reminder'])
+    updated_task['created_at'] = datetime.fromisoformat(updated_task['created_at'])
+    updated_task['updated_at'] = datetime.fromisoformat(updated_task['updated_at'])
+    
+    return Task(**updated_task)
+
+@api_router.delete("/tasks/{task_id}")
+async def delete_task(
+    task_id: str,
+    current_user: UserSession = Depends(get_current_user)
+):
+    """Delete a task"""
+    result = await db.tasks.delete_one({"id": task_id, "user_id": current_user.user_id})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    return {"message": "Task deleted successfully"}
+
+@api_router.get("/tasks/categories")
+async def get_task_categories(current_user: UserSession = Depends(get_current_user)):
+    """Get all unique categories for user's tasks"""
+    pipeline = [
+        {"$match": {"user_id": current_user.user_id}},
+        {"$group": {"_id": "$category"}},
+        {"$sort": {"_id": 1}}
+    ]
+    
+    categories = await db.tasks.aggregate(pipeline).to_list(100)
+    return [cat["_id"] for cat in categories if cat["_id"]]
+
+# Mock Calendar Routes (since we're doing read-only for now)
+@api_router.get("/calendar/events", response_model=List[CalendarEvent])
+async def get_calendar_events(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: UserSession = Depends(get_current_user)
+):
+    """Get calendar events (mock data for now)"""
+    # For now, return mock calendar events
+    # In a real implementation, this would integrate with Google Calendar API
+    
+    mock_events = [
+        {
+            "id": "event_1",
+            "title": "Team Meeting",
+            "description": "Weekly team sync",
+            "start_time": datetime.now(timezone.utc) + timedelta(hours=2),
+            "end_time": datetime.now(timezone.utc) + timedelta(hours=3),
+            "all_day": False,
+            "location": "Conference Room A",
+            "calendar_id": "primary"
+        },
+        {
+            "id": "event_2",
+            "title": "Project Deadline",
+            "description": "Submit final project deliverables",
+            "start_time": datetime.now(timezone.utc) + timedelta(days=3),
+            "end_time": datetime.now(timezone.utc) + timedelta(days=3, hours=1),
+            "all_day": True,
+            "location": "",
+            "calendar_id": "primary"
+        },
+        {
+            "id": "event_3",
+            "title": "Client Presentation",
+            "description": "Present project proposal to client",
+            "start_time": datetime.now(timezone.utc) + timedelta(days=7, hours=10),
+            "end_time": datetime.now(timezone.utc) + timedelta(days=7, hours=11),
+            "all_day": False,
+            "location": "Client Office",
+            "calendar_id": "primary"
+        }
+    ]
+    
+    return [CalendarEvent(**event) for event in mock_events]
+
+# Dashboard/Summary Routes
+@api_router.get("/dashboard/summary")
+async def get_dashboard_summary(current_user: UserSession = Depends(get_current_user)):
+    """Get dashboard summary with tasks and events overview"""
+    
+    # Get task statistics
+    total_tasks = await db.tasks.count_documents({"user_id": current_user.user_id})
+    completed_tasks = await db.tasks.count_documents({"user_id": current_user.user_id, "completed": True})
+    pending_tasks = total_tasks - completed_tasks
+    
+    # Get today's tasks
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + timedelta(days=1)
+    
+    today_tasks = await db.tasks.find({
+        "user_id": current_user.user_id,
+        "due_date": {"$gte": today_start.isoformat(), "$lt": today_end.isoformat()}
+    }).to_list(100)
+    
+    # Get upcoming tasks (next 7 days)
+    week_end = today_start + timedelta(days=7)
+    upcoming_tasks = await db.tasks.find({
+        "user_id": current_user.user_id,
+        "due_date": {"$gte": today_start.isoformat(), "$lt": week_end.isoformat()},
+        "completed": False
+    }).to_list(100)
+    
+    return {
+        "task_stats": {
+            "total": total_tasks,
+            "completed": completed_tasks,
+            "pending": pending_tasks
+        },
+        "today_tasks_count": len(today_tasks),
+        "upcoming_tasks_count": len(upcoming_tasks),
+        "upcoming_events_count": 3  # Mock data for now
+    }
 
 # Include the router in the main app
 app.include_router(api_router)
