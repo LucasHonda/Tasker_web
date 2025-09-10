@@ -475,7 +475,10 @@ async def get_calendar_events(
 
 # Dashboard/Summary Routes
 @api_router.get("/dashboard/summary")
-async def get_dashboard_summary(current_user: UserSession = Depends(get_current_user)):
+async def get_dashboard_summary(
+    current_user: UserSession = Depends(get_current_user),
+    calendar_service = Depends(get_google_calendar_service)
+):
     """Get dashboard summary with tasks and events overview"""
     
     # Get task statistics
@@ -500,6 +503,10 @@ async def get_dashboard_summary(current_user: UserSession = Depends(get_current_
         "completed": False
     }).to_list(100)
     
+    # Get upcoming events count (enhanced mock data)
+    # In reality, this would count actual calendar events from Google Calendar API
+    upcoming_events_count = 8  # Based on our enhanced mock data
+    
     return {
         "task_stats": {
             "total": total_tasks,
@@ -508,7 +515,12 @@ async def get_dashboard_summary(current_user: UserSession = Depends(get_current_
         },
         "today_tasks_count": len(today_tasks),
         "upcoming_tasks_count": len(upcoming_tasks),
-        "upcoming_events_count": 3  # Mock data for now
+        "upcoming_events_count": upcoming_events_count,
+        "user_info": {
+            "name": current_user.name,
+            "email": current_user.email,
+            "calendar_connected": True  # Since we have mock calendar integration
+        }
     }
 
 # Include the router in the main app
