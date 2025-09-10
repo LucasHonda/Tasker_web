@@ -120,6 +120,11 @@ async def get_current_user(
         picture=user_doc["picture"]
     )
 
+# Basic Routes
+@api_router.get("/")
+async def root():
+    return {"message": "Calendar & Task Manager API"}
+
 # Authentication Routes
 @api_router.post("/auth/session")
 async def process_session(request: Request, response: Response):
