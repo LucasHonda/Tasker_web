@@ -665,6 +665,7 @@ const Dashboard = () => {
       await axios.post(`${API}/tasks`, taskData);
       fetchTasks();
       fetchSummary();
+      fetchCategories();
       setShowTaskForm(false);
     } catch (error) {
       console.error('Error creating task:', error);
@@ -676,6 +677,7 @@ const Dashboard = () => {
       await axios.put(`${API}/tasks/${editingTask.id}`, taskData);
       fetchTasks();
       fetchSummary();
+      fetchCategories();
       setEditingTask(null);
     } catch (error) {
       console.error('Error updating task:', error);
