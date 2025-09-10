@@ -217,15 +217,51 @@ const TaskForm = ({ task, onSubmit, onCancel }) => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-              <select
-                value={formData.category}
-                onChange={(e) => setFormData({...formData, category: e.target.value})}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                {categories.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  value={formData.category}
+                  onChange={(e) => {
+                    if (e.target.value === '_add_new_') {
+                      setShowNewCategory(true);
+                    } else {
+                      setFormData({...formData, category: e.target.value});
+                    }
+                  }}
+                  className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  {availableCategories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                  <option value="_add_new_">+ Add New Category</option>
+                </select>
+              </div>
+              
+              {showNewCategory && (
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="text"
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    placeholder="New category name..."
+                    className="flex-1 p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    onKeyPress={(e) => e.key === 'Enter' && handleAddCategory()}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddCategory}
+                    className="px-3 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
+                  >
+                    Add
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {setShowNewCategory(false); setNewCategory('');}}
+                    className="px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
             </div>
 
             <div>
