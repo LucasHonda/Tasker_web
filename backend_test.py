@@ -51,8 +51,8 @@ class BackendTester:
                 "name": "Test User",
                 "picture": "https://example.com/avatar.jpg",
                 "session_token": str(uuid.uuid4()),
-                "expires_at": datetime.now(timezone.utc) + timedelta(days=7),
-                "created_at": datetime.now(timezone.utc)
+                "expires_at": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat()
             }
             
             # Insert into database
