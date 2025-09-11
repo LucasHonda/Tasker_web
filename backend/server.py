@@ -794,6 +794,48 @@ async def test_google_calendar_access(
             "fallback": "Using mock calendar data"
         }
 
+@api_router.get("/calendar/auth-status")
+async def get_calendar_auth_status(current_user: UserSession = Depends(get_current_user)):
+    """Get Google Calendar authorization status"""
+    try:
+        user_doc = await db.users.find_one({"id": current_user.user_id})
+        if not user_doc:
+            return {"authorized": False, "auth_url": "/api/auth/google/calendar"}
+        
+        google_access_token = user_doc.get("google_access_token")
+        google_token_expires_at = user_doc.get("google_token_expires_at")
+        
+        if not google_access_token:
+            return {
+                "authorized": False, 
+                "auth_url": "/api/auth/google/calendar",
+                "message": "Click to authorize calendar access"
+            }
+        
+        # Check if token is expired
+        if google_token_expires_at:
+            if isinstance(google_token_expires_at, str):
+                expires_at = datetime.fromisoformat(google_token_expires_at)
+            else:
+                expires_at = google_token_expires_at
+                
+            if expires_at < datetime.now(timezone.utc):
+                return {
+                    "authorized": False, 
+                    "auth_url": "/api/auth/google/calendar",
+                    "message": "Calendar access expired, click to reauthorize"
+                }
+        
+        return {
+            "authorized": True,
+            "message": "Calendar access granted",
+            "expires_at": google_token_expires_at
+        }
+        
+    except Exception as e:
+        logging.error(f"Error checking calendar auth status: {str(e)}")
+        return {"authorized": False, "auth_url": "/api/auth/google/calendar"}
+
 # Calendar Routes
 @api_router.get("/calendar/events", response_model=List[CalendarEvent])
 async def get_calendar_events(
