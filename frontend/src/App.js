@@ -503,8 +503,8 @@ const CalendarView = ({ events, selectedDate, onDateChange, viewType, onViewType
                       <span>{new Date(event.start_time).toLocaleDateString(undefined, { timeZone: 'UTC' })}</span>
                       {!event.all_day && (
                         <span>
-                          {new Date(event.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - 
-                          {new Date(event.end_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          {new Date(event.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', timeZone: 'UTC'})} - 
+                          {new Date(event.end_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', timeZone: 'UTC'})}
                         </span>
                       )}
                       {event.location && <span>📍 {event.location}</span>}
