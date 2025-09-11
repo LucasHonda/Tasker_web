@@ -1079,6 +1079,36 @@ const Dashboard = () => {
           onCancel={() => setEditingTask(null)}
         />
       )}
+
+      {deleteConfirm.show && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Task</h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to delete "{deleteConfirm.taskTitle}"? This action cannot be undone.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={cancelDelete}
+                  className="flex-1 bg-gray-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-gray-600 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  className="flex-1 bg-red-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-red-600 transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
