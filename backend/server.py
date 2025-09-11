@@ -502,7 +502,7 @@ async def get_calendar_events(
     calendar_service = Depends(get_google_calendar_service),
     current_user: UserSession = Depends(get_current_user)
 ):
-    """Get calendar events - Enhanced mock data with user context"""
+    """Get calendar events - Real Google Calendar integration with fallback to enhanced mock data"""
     
     # Parse date range if provided
     start_dt = datetime.now(timezone.utc) - timedelta(days=1)  # Default: yesterday
@@ -520,98 +520,10 @@ async def get_calendar_events(
         except ValueError:
             pass
     
-    # Enhanced mock events with more variety and user context
-    mock_events = [
-        {
-            "id": "event_1",
-            "title": f"Welcome Meeting - {current_user.name}",
-            "description": "Onboarding session and goal setting",
-            "start_time": datetime.now(timezone.utc) + timedelta(hours=2),
-            "end_time": datetime.now(timezone.utc) + timedelta(hours=3),
-            "all_day": False,
-            "location": "Conference Room A",
-            "calendar_id": "primary"
-        },
-        {
-            "id": "event_2",
-            "title": "Project Planning Session",
-            "description": "Quarterly planning and resource allocation",
-            "start_time": datetime.now(timezone.utc) + timedelta(days=1, hours=10),
-            "end_time": datetime.now(timezone.utc) + timedelta(days=1, hours=12),
-            "all_day": False,
-            "location": "Meeting Room B",
-            "calendar_id": "primary"
-        },
-        {
-            "id": "event_3",
-            "title": "All Hands Meeting",
-            "description": "Company-wide updates and announcements",
-            "start_time": datetime.now(timezone.utc) + timedelta(days=3),
-            "end_time": datetime.now(timezone.utc) + timedelta(days=3, hours=1),
-            "all_day": True,
-            "location": "Main Auditorium",
-            "calendar_id": "primary"
-        },
-        {
-            "id": "event_4",
-            "title": "Client Presentation",
-            "description": "Present project proposal and deliverables",
-            "start_time": datetime.now(timezone.utc) + timedelta(days=5, hours=14),
-            "end_time": datetime.now(timezone.utc) + timedelta(days=5, hours=15, minutes=30),
-            "all_day": False,
-            "location": "Client Office - Downtown",
-            "calendar_id": "primary"
-        },
-        {
-            "id": "event_5",
-            "title": "Team Building Workshop",
-            "description": "Interactive team building and collaboration exercises",
-            "start_time": datetime.now(timezone.utc) + timedelta(days=8, hours=9),
-            "end_time": datetime.now(timezone.utc) + timedelta(days=8, hours=17),
-            "all_day": False,
-            "location": "Offsite Location",
-            "calendar_id": "primary"
-        },
-        {
-            "id": "event_6",
-            "title": "Performance Review",
-            "description": f"Quarterly review session with {current_user.name}",
-            "start_time": datetime.now(timezone.utc) + timedelta(days=10, hours=15),
-            "end_time": datetime.now(timezone.utc) + timedelta(days=10, hours=16),
-            "all_day": False,
-            "location": "Manager's Office",
-            "calendar_id": "primary"
-        },
-        {
-            "id": "event_7",
-            "title": "Training Workshop",
-            "description": "Professional development and skill enhancement",
-            "start_time": datetime.now(timezone.utc) + timedelta(days=12, hours=13),
-            "end_time": datetime.now(timezone.utc) + timedelta(days=12, hours=17),
-            "all_day": False,
-            "location": "Training Center",
-            "calendar_id": "primary"
-        },
-        {
-            "id": "event_8",
-            "title": "Monthly Standup",
-            "description": "Progress updates and roadmap discussion",
-            "start_time": datetime.now(timezone.utc) + timedelta(days=15, hours=10),
-            "end_time": datetime.now(timezone.utc) + timedelta(days=15, hours=11),
-            "all_day": False,
-            "location": "Virtual Meeting",
-            "calendar_id": "primary"
-        }
-    ]
+    # Try to fetch real Google Calendar events, with fallback to mock data
+    events_data = await fetch_google_calendar_events(calendar_service, start_dt, end_dt, current_user)
     
-    # Filter events by date range
-    filtered_events = []
-    for event in mock_events:
-        event_start = event["start_time"]
-        if start_dt <= event_start <= end_dt:
-            filtered_events.append(event)
-    
-    return [CalendarEvent(**event) for event in filtered_events]
+    return [CalendarEvent(**event) for event in events_data]
 
 # Dashboard/Summary Routes
 @api_router.get("/dashboard/summary")
