@@ -260,20 +260,102 @@ async def refresh_google_token(refresh_token: str):
 async def fetch_google_calendar_events(google_service, start_time, end_time, current_user):
     """Fetch calendar events from Google Calendar API"""
     try:
-        if google_service.get("use_mock"):
-            # Return enhanced mock data
-            return get_mock_calendar_events(current_user, start_time, end_time)
+        if not google_service.get("authenticated"):
+            # Return authorization required message
+            return [{
+                "id": "auth-required",
+                "title": "🔐 Calendar Authorization Required",
+                "description": "Click here to grant calendar access and see your real events",
+                "start_time": datetime.now(timezone.utc) + timedelta(hours=1),
+                "end_time": datetime.now(timezone.utc) + timedelta(hours=2),
+                "all_day": False,
+                "location": "Click to authorize →",
+                "calendar_id": "auth-required"
+            }]
         
-        # If we have real Google OAuth data, try to use it
-        if "google_oauth_data" in google_service:
-            oauth_data = google_service["google_oauth_data"]
+        # If we have real Google Calendar service, fetch actual events
+        if "service" in google_service:
+            service = google_service["service"]
             
-            # Here we would use the Google Calendar API with real OAuth tokens
-            # For now, we'll use enhanced mock data but with a note that we tried real integration
-            logging.info(f"Would use real Google Calendar API with OAuth data for {current_user.email}")
-            return get_mock_calendar_events(current_user, start_time, end_time, real_integration_attempted=True)
+            # Convert datetime to RFC3339 format for Google Calendar API
+            time_min = start_time.isoformat()
+            time_max = end_time.isoformat()
+            
+            try:
+                # Fetch events from Google Calendar API
+                events_result = service.events().list(
+                    calendarId='primary',
+                    timeMin=time_min,
+                    timeMax=time_max,
+                    maxResults=50,
+                    singleEvents=True,
+                    orderBy='startTime'
+                ).execute()
+                
+                events = events_result.get('items', [])
+                
+                # Convert Google Calendar events to our format
+                formatted_events = []
+                for event in events:
+                    # Handle different types of start/end times
+                    start = event['start']
+                    end = event['end']
+                    
+                    if 'dateTime' in start:
+                        # Timed event
+                        start_time = datetime.fromisoformat(start['dateTime'].replace('Z', '+00:00'))
+                        end_time = datetime.fromisoformat(end['dateTime'].replace('Z', '+00:00'))
+                        all_day = False
+                    else:
+                        # All-day event
+                        start_time = datetime.fromisoformat(start['date'] + 'T00:00:00+00:00')
+                        end_time = datetime.fromisoformat(end['date'] + 'T00:00:00+00:00')
+                        all_day = True
+                    
+                    formatted_event = {
+                        "id": event.get('id', 'unknown'),
+                        "title": f"📅 {event.get('summary', 'Untitled Event')}",
+                        "description": event.get('description', ''),
+                        "start_time": start_time,
+                        "end_time": end_time,
+                        "all_day": all_day,
+                        "location": event.get('location', ''),
+                        "calendar_id": event.get('calendarId', 'primary')
+                    }
+                    formatted_events.append(formatted_event)
+                
+                if formatted_events:
+                    logging.info(f"Successfully fetched {len(formatted_events)} real calendar events for {current_user.email}")
+                    return formatted_events
+                else:
+                    # No events found, return a friendly message
+                    return [{
+                        "id": "no-events",
+                        "title": "✨ No events scheduled",
+                        "description": f"No events found in your calendar for the selected time period",
+                        "start_time": datetime.now(timezone.utc) + timedelta(hours=1),
+                        "end_time": datetime.now(timezone.utc) + timedelta(hours=2),
+                        "all_day": False,
+                        "location": "",
+                        "calendar_id": "info"
+                    }]
+                    
+            except Exception as api_error:
+                logging.error(f"Google Calendar API error: {str(api_error)}")
+                # Return error event
+                return [{
+                    "id": "api-error",
+                    "title": "⚠️ Calendar API Error",
+                    "description": f"Unable to fetch events: {str(api_error)}",
+                    "start_time": datetime.now(timezone.utc) + timedelta(hours=1),
+                    "end_time": datetime.now(timezone.utc) + timedelta(hours=2),
+                    "all_day": False,
+                    "location": "Check permissions",
+                    "calendar_id": "error"
+                }]
         
-        # Fallback to mock data
+        # Fallback to enhanced mock data
+        logging.info(f"Using fallback mock data for {current_user.email}")
         return get_mock_calendar_events(current_user, start_time, end_time)
         
     except Exception as e:
