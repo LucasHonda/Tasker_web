@@ -324,8 +324,19 @@ const TaskForm = ({ task, onSubmit, onCancel }) => {
 const TaskItem = ({ task, onToggle, onEdit, onDelete }) => {
   const formatDate = (dateString) => {
     if (!dateString) return '';
+    // Parse date while preserving timezone to avoid off-by-one errors
     const date = new Date(dateString);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    // Use UTC methods to avoid timezone conversion issues
+    return date.toLocaleDateString(undefined, { 
+      timeZone: 'UTC',
+      year: 'numeric', 
+      month: '2-digit', 
+      day: '2-digit' 
+    }) + ' ' + date.toLocaleTimeString([], {
+      hour: '2-digit', 
+      minute:'2-digit',
+      timeZone: 'UTC'
+    });
   };
 
   const getPriorityColor = (priority) => {
