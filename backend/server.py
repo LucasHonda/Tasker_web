@@ -492,67 +492,138 @@ async def google_calendar_auth(request: Request, current_user: UserSession = Dep
 async def google_calendar_callback(request: Request):
     """Handle Google OAuth callback and store tokens"""
     try:
-        # Get the OAuth token
-        token = await oauth.google.authorize_access_token(request)
+        # Get the authorization code from the callback URL
+        code = request.query_params.get('code')
+        state = request.query_params.get('state')
         
-        # Instead of parsing ID token (which causes jwks_uri error), 
-        # use the access token to get user info directly from Google API
+        if not code:
+            raise Exception("No authorization code received")
+        
+        # Exchange authorization code for tokens directly with Google
         async with httpx.AsyncClient() as client:
+            token_response = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "client_id": GOOGLE_CLIENT_ID,
+                    "client_secret": GOOGLE_CLIENT_SECRET,
+                    "code": code,
+                    "grant_type": "authorization_code",
+                    "redirect_uri": "https://schedule-buddy-62.preview.emergentagent.com/api/auth/google/callback"
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"}
+            )
+            
+            if token_response.status_code != 200:
+                logging.error(f"Token exchange failed: {token_response.status_code} - {token_response.text}")
+                raise Exception(f"Token exchange failed: {token_response.status_code}")
+            
+            token_data = token_response.json()
+            access_token = token_data.get('access_token')
+            refresh_token = token_data.get('refresh_token') 
+            expires_in = token_data.get('expires_in', 3600)
+            
+            if not access_token:
+                raise Exception("No access token received")
+            
+            # Get user info using the access token
             user_info_response = await client.get(
-                "https://www.googleapis.com/oauth2/v2/userinfo",
-                headers={"Authorization": f"Bearer {token['access_token']}"}
+                "https://www.googleapis.com/oauth2/v2/userinfo", 
+                headers={"Authorization": f"Bearer {access_token}"}
             )
             
             if user_info_response.status_code != 200:
+                logging.error(f"User info request failed: {user_info_response.status_code} - {user_info_response.text}")
                 raise Exception(f"Failed to get user info: {user_info_response.status_code}")
             
             user_info = user_info_response.json()
-        
-        # Get the user email
-        user_email = user_info.get('email')
-        if not user_email:
-            raise Exception("No email in Google response")
+            user_email = user_info.get('email')
+            
+            if not user_email:
+                raise Exception("No email in Google user info")
         
         # Update user with Google OAuth tokens
-        google_token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=token.get('expires_in', 3600))
+        google_token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
         
         update_result = await db.users.update_one(
             {"email": user_email},
             {
                 "$set": {
-                    "google_access_token": token.get('access_token'),
-                    "google_refresh_token": token.get('refresh_token'),
+                    "google_access_token": access_token,
+                    "google_refresh_token": refresh_token,
                     "google_token_expires_at": google_token_expires_at.isoformat()
                 }
             }
         )
         
         if update_result.modified_count == 0:
-            # User might not exist, let's try to find them and log the issue
+            # Try to find the user to provide better error message
             existing_user = await db.users.find_one({"email": user_email})
             if not existing_user:
                 logging.error(f"User with email {user_email} not found in database")
-                raise Exception(f"User not found: {user_email}")
+                raise Exception(f"User account not found. Please sign in to the app first, then connect calendar.")
             else:
-                logging.warning(f"User {user_email} found but update failed")
+                logging.warning(f"User {user_email} found but token update failed")
+                raise Exception("Failed to save calendar connection")
         
-        # Redirect back to the main app with success message
+        logging.info(f"Successfully connected Google Calendar for user: {user_email}")
+        
+        # Return success page
         return Response(
             content="""
             <html>
                 <head>
                     <title>Calendar Connected!</title>
                     <style>
-                        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
-                        .container { background: white; color: #333; padding: 30px; border-radius: 10px; max-width: 400px; margin: 0 auto; }
-                        .success { color: #10b981; font-size: 24px; margin-bottom: 20px; }
+                        body { 
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                            margin: 0; padding: 0;
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            min-height: 100vh;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                        }
+                        .container { 
+                            background: white;
+                            padding: 40px;
+                            border-radius: 12px;
+                            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                            text-align: center;
+                            max-width: 400px;
+                        }
+                        .success { 
+                            color: #10b981;
+                            font-size: 28px; 
+                            margin-bottom: 16px;
+                            font-weight: bold;
+                        }
+                        .message { 
+                            color: #4b5563;
+                            font-size: 16px;
+                            line-height: 1.5;
+                            margin-bottom: 20px;
+                        }
+                        .note { 
+                            color: #6b7280;
+                            font-size: 14px;
+                        }
+                        .icon { 
+                            font-size: 48px;
+                            margin-bottom: 20px;
+                        }
                     </style>
                 </head>
                 <body>
                     <div class="container">
-                        <div class="success">✅ Google Calendar Connected!</div>
-                        <p>Your calendar has been successfully connected. You can now close this window and return to the app to see your calendar events.</p>
-                        <p><small>This window will close automatically in 3 seconds...</small></p>
+                        <div class="icon">📅</div>
+                        <div class="success">Calendar Connected!</div>
+                        <div class="message">
+                            Your Google Calendar has been successfully connected.<br>
+                            You can now see your real calendar events in the app.
+                        </div>
+                        <div class="note">
+                            This window will close automatically in 3 seconds...
+                        </div>
                     </div>
                     <script>
                         setTimeout(() => {
@@ -565,31 +636,65 @@ async def google_calendar_callback(request: Request):
             media_type="text/html"
         )
         
-    except OAuthError as e:
-        logging.error(f"OAuth error in callback: {str(e)}")
-        return Response(
-            content=f"""
-            <html>
-                <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-                    <h2>OAuth Error</h2>
-                    <p>OAuth error: {str(e)}</p>
-                    <p>Please try again or contact support.</p>
-                    <script>setTimeout(() => window.close(), 5000);</script>
-                </body>
-            </html>
-            """,
-            media_type="text/html"
-        )
     except Exception as e:
-        logging.error(f"Google callback error: {str(e)}")
+        logging.error(f"Google calendar callback error: {str(e)}")
         return Response(
             content=f"""
             <html>
-                <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-                    <h2>Connection Error</h2>
-                    <p>Failed to connect calendar: {str(e)}</p>
-                    <p>Please try again or contact support.</p>
-                    <script>setTimeout(() => window.close(), 5000);</script>
+                <head>
+                    <title>Connection Error</title>
+                    <style>
+                        body {{ 
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                            margin: 0; padding: 0;
+                            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+                            min-height: 100vh;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                        }}
+                        .container {{ 
+                            background: white;
+                            padding: 40px;
+                            border-radius: 12px;
+                            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                            text-align: center;
+                            max-width: 400px;
+                        }}
+                        .error {{ 
+                            color: #ef4444;
+                            font-size: 24px; 
+                            margin-bottom: 16px;
+                            font-weight: bold;
+                        }}
+                        .message {{ 
+                            color: #4b5563;
+                            font-size: 16px;
+                            line-height: 1.5;
+                            margin-bottom: 20px;
+                        }}
+                        .note {{ 
+                            color: #6b7280;
+                            font-size: 14px;
+                        }}
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="error">⚠️ Connection Failed</div>
+                        <div class="message">
+                            {str(e)}<br><br>
+                            Please try connecting again, or contact support if the issue persists.
+                        </div>
+                        <div class="note">
+                            This window will close automatically in 5 seconds...
+                        </div>
+                    </div>
+                    <script>
+                        setTimeout(() => {{
+                            window.close();
+                        }}, 5000);
+                    </script>
                 </body>
             </html>
             """,
