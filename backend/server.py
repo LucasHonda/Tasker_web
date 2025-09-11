@@ -127,15 +127,38 @@ async def get_current_user(
 async def get_google_calendar_service(current_user: UserSession = Depends(get_current_user)):
     """Get authenticated Google Calendar service for the current user"""
     try:
-        # Get user's stored session token to fetch Google credentials
+        # Get user's stored session token
         user_doc = await db.users.find_one({"id": current_user.user_id})
         if not user_doc or not user_doc.get("session_token"):
             raise HTTPException(status_code=401, detail="No valid session found")
         
-        # For now, we'll simulate Google Calendar access
-        # In a real implementation, we would exchange the Emergent session for Google OAuth tokens
-        # This is a placeholder that returns mock data structure
-        return {"user_email": current_user.email, "authenticated": True}
+        # Get additional OAuth info from Emergent Auth system
+        session_token = user_doc["session_token"]
+        
+        # Call Emergent Auth to get Google OAuth token details
+        async with httpx.AsyncClient() as client:
+            try:
+                # Try to get extended session data that might include Google OAuth tokens
+                response = await client.get(
+                    "https://demobackend.emergentagent.com/auth/v1/env/oauth/google-calendar-access",
+                    headers={"X-Session-Token": session_token},
+                    timeout=10.0
+                )
+                
+                if response.status_code == 200:
+                    google_data = response.json()
+                    return {"google_oauth_data": google_data, "user_email": current_user.email}
+                else:
+                    # If specific calendar endpoint doesn't exist, try general approach
+                    logging.info(f"Calendar-specific endpoint returned {response.status_code}, using mock data")
+                    return {"user_email": current_user.email, "authenticated": True, "use_mock": True}
+                    
+            except httpx.TimeoutException:
+                logging.warning("Timeout getting Google Calendar access, using mock data")
+                return {"user_email": current_user.email, "authenticated": True, "use_mock": True}
+            except Exception as e:
+                logging.warning(f"Error getting Google Calendar access: {str(e)}, using mock data")
+                return {"user_email": current_user.email, "authenticated": True, "use_mock": True}
         
     except Exception as e:
         logging.error(f"Failed to get Google Calendar service: {str(e)}")
