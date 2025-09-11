@@ -492,14 +492,26 @@ async def google_calendar_auth(request: Request, current_user: UserSession = Dep
 async def google_calendar_callback(request: Request):
     """Handle Google OAuth callback and store tokens"""
     try:
+        # Get the OAuth token
         token = await oauth.google.authorize_access_token(request)
-        user_info = await oauth.google.parse_id_token(request, token)
         
-        # Get the current user from session (you'll need to implement session management)
-        # For now, we'll find user by email
+        # Instead of parsing ID token (which causes jwks_uri error), 
+        # use the access token to get user info directly from Google API
+        async with httpx.AsyncClient() as client:
+            user_info_response = await client.get(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                headers={"Authorization": f"Bearer {token['access_token']}"}
+            )
+            
+            if user_info_response.status_code != 200:
+                raise Exception(f"Failed to get user info: {user_info_response.status_code}")
+            
+            user_info = user_info_response.json()
+        
+        # Get the user email
         user_email = user_info.get('email')
         if not user_email:
-            raise HTTPException(status_code=400, detail="No email in Google response")
+            raise Exception("No email in Google response")
         
         # Update user with Google OAuth tokens
         google_token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=token.get('expires_in', 3600))
@@ -516,19 +528,36 @@ async def google_calendar_callback(request: Request):
         )
         
         if update_result.modified_count == 0:
-            raise HTTPException(status_code=404, detail="User not found")
+            # User might not exist, let's try to find them and log the issue
+            existing_user = await db.users.find_one({"email": user_email})
+            if not existing_user:
+                logging.error(f"User with email {user_email} not found in database")
+                raise Exception(f"User not found: {user_email}")
+            else:
+                logging.warning(f"User {user_email} found but update failed")
         
-        # Redirect back to the main app
+        # Redirect back to the main app with success message
         return Response(
             content="""
             <html>
+                <head>
+                    <title>Calendar Connected!</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+                        .container { background: white; color: #333; padding: 30px; border-radius: 10px; max-width: 400px; margin: 0 auto; }
+                        .success { color: #10b981; font-size: 24px; margin-bottom: 20px; }
+                    </style>
+                </head>
                 <body>
-                    <h2>Calendar Access Granted!</h2>
-                    <p>You can now close this window and return to the app.</p>
+                    <div class="container">
+                        <div class="success">✅ Google Calendar Connected!</div>
+                        <p>Your calendar has been successfully connected. You can now close this window and return to the app to see your calendar events.</p>
+                        <p><small>This window will close automatically in 3 seconds...</small></p>
+                    </div>
                     <script>
                         setTimeout(() => {
                             window.close();
-                        }, 2000);
+                        }, 3000);
                     </script>
                 </body>
             </html>
@@ -537,11 +566,35 @@ async def google_calendar_callback(request: Request):
         )
         
     except OAuthError as e:
-        logging.error(f"OAuth error: {str(e)}")
-        raise HTTPException(status_code=400, detail=f"OAuth error: {str(e)}")
+        logging.error(f"OAuth error in callback: {str(e)}")
+        return Response(
+            content=f"""
+            <html>
+                <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                    <h2>OAuth Error</h2>
+                    <p>OAuth error: {str(e)}</p>
+                    <p>Please try again or contact support.</p>
+                    <script>setTimeout(() => window.close(), 5000);</script>
+                </body>
+            </html>
+            """,
+            media_type="text/html"
+        )
     except Exception as e:
         logging.error(f"Google callback error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Authentication callback failed")
+        return Response(
+            content=f"""
+            <html>
+                <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                    <h2>Connection Error</h2>
+                    <p>Failed to connect calendar: {str(e)}</p>
+                    <p>Please try again or contact support.</p>
+                    <script>setTimeout(() => window.close(), 5000);</script>
+                </body>
+            </html>
+            """,
+            media_type="text/html"
+        )
 
 # Basic Routes
 @api_router.get("/")
