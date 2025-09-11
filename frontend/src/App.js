@@ -608,13 +608,45 @@ const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [summary, setSummary] = useState(null);
   const [availableCategories, setAvailableCategories] = useState([]);
+  const [calendarAuthStatus, setCalendarAuthStatus] = useState(null);
 
   useEffect(() => {
     fetchTasks();
     fetchEvents();
     fetchSummary();
     fetchCategories();
+    fetchCalendarAuthStatus();
   }, []);
+
+  const fetchCalendarAuthStatus = async () => {
+    try {
+      const response = await axios.get(`${API}/calendar/auth-status`);
+      setCalendarAuthStatus(response.data);
+    } catch (error) {
+      console.error('Error fetching calendar auth status:', error);
+    }
+  };
+
+  const handleCalendarAuth = () => {
+    // Open Google Calendar authorization in a new window
+    const authWindow = window.open(
+      `${BACKEND_URL}/api/auth/google/calendar`,
+      'google-auth',
+      'width=500,height=600'
+    );
+    
+    // Listen for the window to close (indicating auth completion)
+    const checkClosed = setInterval(() => {
+      if (authWindow.closed) {
+        clearInterval(checkClosed);
+        // Refresh calendar auth status and events
+        setTimeout(() => {
+          fetchCalendarAuthStatus();
+          fetchEvents();
+        }, 1000);
+      }
+    }, 1000);
+  };
 
   const fetchCategories = async () => {
     try {
