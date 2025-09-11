@@ -456,7 +456,10 @@ const CalendarView = ({ events, selectedDate, onDateChange, viewType, onViewType
   const getEventsForDate = (date) => {
     return events.filter(event => {
       const eventDate = new Date(event.start_time);
-      return eventDate.toDateString() === date.toDateString();
+      // Use UTC dates to avoid timezone issues
+      const eventDateUTC = new Date(eventDate.getUTCFullYear(), eventDate.getUTCMonth(), eventDate.getUTCDate());
+      const compareDateUTC = new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+      return eventDateUTC.getTime() === compareDateUTC.getTime();
     });
   };
 
