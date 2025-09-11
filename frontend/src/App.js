@@ -623,6 +623,7 @@ const Dashboard = () => {
   const [summary, setSummary] = useState(null);
   const [availableCategories, setAvailableCategories] = useState([]);
   const [calendarAuthStatus, setCalendarAuthStatus] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState({ show: false, taskId: null, taskTitle: '' });
 
   useEffect(() => {
     fetchTasks();
