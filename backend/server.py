@@ -494,6 +494,63 @@ async def get_task_categories(current_user: UserSession = Depends(get_current_us
     categories = await db.tasks.aggregate(pipeline).to_list(100)
     return [cat["_id"] for cat in categories if cat["_id"]]
 
+@api_router.get("/calendar/test-google-access")
+async def test_google_calendar_access(
+    current_user: UserSession = Depends(get_current_user)
+):
+    """Test endpoint to check Google Calendar API access status"""
+    try:
+        user_doc = await db.users.find_one({"id": current_user.user_id})
+        if not user_doc:
+            return {"status": "error", "message": "User not found"}
+        
+        session_token = user_doc.get("session_token")
+        if not session_token:
+            return {"status": "error", "message": "No session token"}
+        
+        # Try to get the user's OAuth scope and permissions
+        async with httpx.AsyncClient() as client:
+            try:
+                # Test if we can get user info with calendar scope
+                response = await client.get(
+                    "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                    headers={"X-Session-ID": session_token},
+                    timeout=10.0
+                )
+                
+                if response.status_code == 200:
+                    session_data = response.json()
+                    return {
+                        "status": "partial_success",
+                        "message": "Emergent auth session valid",
+                        "user_info": {
+                            "email": session_data.get("email", "unknown"),
+                            "name": session_data.get("name", "unknown")
+                        },
+                        "note": "Google Calendar API requires additional OAuth scopes not currently available through Emergent Auth",
+                        "recommendation": "Using enhanced mock data with user personalization"
+                    }
+                else:
+                    return {
+                        "status": "error", 
+                        "message": f"Session validation failed: {response.status_code}",
+                        "fallback": "Using mock calendar data"
+                    }
+                    
+            except Exception as e:
+                return {
+                    "status": "error",
+                    "message": f"Network error: {str(e)}",
+                    "fallback": "Using mock calendar data"
+                }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Test failed: {str(e)}",
+            "fallback": "Using mock calendar data"
+        }
+
 # Calendar Routes
 @api_router.get("/calendar/events", response_model=List[CalendarEvent])
 async def get_calendar_events(
