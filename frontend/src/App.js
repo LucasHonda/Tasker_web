@@ -500,7 +500,7 @@ const CalendarView = ({ events, selectedDate, onDateChange, viewType, onViewType
                       <p className="text-sm text-gray-600 mt-1">{event.description}</p>
                     )}
                     <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-                      <span>{new Date(event.start_time).toLocaleDateString()}</span>
+                      <span>{new Date(event.start_time).toLocaleDateString(undefined, { timeZone: 'UTC' })}</span>
                       {!event.all_day && (
                         <span>
                           {new Date(event.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - 
