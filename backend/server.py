@@ -464,6 +464,18 @@ def get_mock_calendar_events(current_user, start_time, end_time, real_integratio
     return filtered_events
 
 # Google Calendar OAuth Routes
+@api_router.get("/auth/google/debug-redirect-uri")
+async def debug_redirect_uri(request: Request):
+    """Debug endpoint to check what redirect URI is being generated"""
+    base_url = str(request.base_url).rstrip('/')
+    redirect_uri = f"{base_url}/api/auth/google/callback"
+    return {
+        "base_url": str(request.base_url),
+        "cleaned_base_url": base_url,
+        "redirect_uri": redirect_uri,
+        "expected_uri": "https://schedule-buddy-62.preview.emergentagent.com/api/auth/google/callback"
+    }
+
 @api_router.get("/auth/google/calendar")
 async def google_calendar_auth(request: Request, current_user: UserSession = Depends(get_current_user)):
     """Initiate Google OAuth flow for calendar access"""
