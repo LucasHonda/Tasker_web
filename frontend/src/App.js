@@ -742,15 +742,29 @@ const Dashboard = () => {
   };
 
   const deleteTask = async (taskId) => {
-    if (window.confirm('Are you sure you want to delete this task?')) {
-      try {
-        await axios.delete(`${API}/tasks/${taskId}`);
-        fetchTasks();
-        fetchSummary();
-      } catch (error) {
-        console.error('Error deleting task:', error);
-      }
+    // Find the task to get its title for the confirmation dialog
+    const task = tasks.find(t => t.id === taskId);
+    setDeleteConfirm({ 
+      show: true, 
+      taskId, 
+      taskTitle: task ? task.title : 'this task' 
+    });
+  };
+
+  const confirmDelete = async () => {
+    try {
+      await axios.delete(`${API}/tasks/${deleteConfirm.taskId}`);
+      fetchTasks();
+      fetchSummary();
+      setDeleteConfirm({ show: false, taskId: null, taskTitle: '' });
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      setDeleteConfirm({ show: false, taskId: null, taskTitle: '' });
     }
+  };
+
+  const cancelDelete = () => {
+    setDeleteConfirm({ show: false, taskId: null, taskTitle: '' });
   };
 
   useEffect(() => {
