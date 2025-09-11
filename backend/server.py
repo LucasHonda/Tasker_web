@@ -158,41 +158,105 @@ async def get_current_user(
 async def get_google_calendar_service(current_user: UserSession = Depends(get_current_user)):
     """Get authenticated Google Calendar service for the current user"""
     try:
-        # Get user's stored session token
+        # Get user's stored Google OAuth tokens
         user_doc = await db.users.find_one({"id": current_user.user_id})
-        if not user_doc or not user_doc.get("session_token"):
-            raise HTTPException(status_code=401, detail="No valid session found")
+        if not user_doc:
+            raise HTTPException(status_code=401, detail="User not found")
         
-        # Get additional OAuth info from Emergent Auth system
-        session_token = user_doc["session_token"]
+        # Check if user has Google Calendar access tokens
+        google_access_token = user_doc.get("google_access_token")
+        google_refresh_token = user_doc.get("google_refresh_token")
+        google_token_expires_at = user_doc.get("google_token_expires_at")
         
-        # Call Emergent Auth to get Google OAuth token details
-        async with httpx.AsyncClient() as client:
-            try:
-                # Try to get extended session data that might include Google OAuth tokens
-                response = await client.get(
-                    "https://demobackend.emergentagent.com/auth/v1/env/oauth/google-calendar-access",
-                    headers={"X-Session-Token": session_token},
-                    timeout=10.0
-                )
+        if not google_access_token:
+            return {
+                "user_email": current_user.email,
+                "authenticated": False,
+                "needs_authorization": True,
+                "auth_url": f"/api/auth/google/calendar"
+            }
+        
+        # Check if token is expired
+        if google_token_expires_at:
+            if isinstance(google_token_expires_at, str):
+                expires_at = datetime.fromisoformat(google_token_expires_at)
+            else:
+                expires_at = google_token_expires_at
                 
-                if response.status_code == 200:
-                    google_data = response.json()
-                    return {"google_oauth_data": google_data, "user_email": current_user.email}
+            if expires_at < datetime.now(timezone.utc):
+                # Token expired, try to refresh
+                if google_refresh_token:
+                    try:
+                        # Refresh the token
+                        new_tokens = await refresh_google_token(google_refresh_token)
+                        
+                        # Update user with new tokens
+                        new_expires_at = datetime.now(timezone.utc) + timedelta(seconds=new_tokens.get('expires_in', 3600))
+                        await db.users.update_one(
+                            {"id": current_user.user_id},
+                            {
+                                "$set": {
+                                    "google_access_token": new_tokens.get('access_token'),
+                                    "google_token_expires_at": new_expires_at.isoformat()
+                                }
+                            }
+                        )
+                        google_access_token = new_tokens.get('access_token')
+                    except Exception as e:
+                        logging.error(f"Token refresh failed: {str(e)}")
+                        return {
+                            "user_email": current_user.email,
+                            "authenticated": False,
+                            "needs_authorization": True,
+                            "auth_url": f"/api/auth/google/calendar"
+                        }
                 else:
-                    # If specific calendar endpoint doesn't exist, try general approach
-                    logging.info(f"Calendar-specific endpoint returned {response.status_code}, using mock data")
-                    return {"user_email": current_user.email, "authenticated": True, "use_mock": True}
-                    
-            except httpx.TimeoutException:
-                logging.warning("Timeout getting Google Calendar access, using mock data")
-                return {"user_email": current_user.email, "authenticated": True, "use_mock": True}
-            except Exception as e:
-                logging.warning(f"Error getting Google Calendar access: {str(e)}, using mock data")
-                return {"user_email": current_user.email, "authenticated": True, "use_mock": True}
+                    return {
+                        "user_email": current_user.email,
+                        "authenticated": False,
+                        "needs_authorization": True,
+                        "auth_url": f"/api/auth/google/calendar"
+                    }
+        
+        # Create Google Calendar service
+        credentials = Credentials(
+            token=google_access_token,
+            refresh_token=google_refresh_token,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=GOOGLE_CLIENT_ID,
+            client_secret=GOOGLE_CLIENT_SECRET
+        )
+        
+        service = build('calendar', 'v3', credentials=credentials)
+        
+        return {
+            "user_email": current_user.email,
+            "authenticated": True,
+            "service": service,
+            "credentials": credentials
+        }
         
     except Exception as e:
         logging.error(f"Failed to get Google Calendar service: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to access calendar service")
+
+async def refresh_google_token(refresh_token: str):
+    """Refresh Google OAuth token"""
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token"
+            }
+        )
+        
+        if response.status_code != 200:
+            raise Exception(f"Token refresh failed: {response.status_code}")
+        
+        return response.json()
 async def fetch_google_calendar_events(google_service, start_time, end_time, current_user):
     """Fetch calendar events from Google Calendar API"""
     try:
