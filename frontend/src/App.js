@@ -860,8 +860,8 @@ const Dashboard = () => {
               <div key={event.id} className="p-3 border border-gray-200 rounded-lg">
                 <h4 className="font-medium text-gray-900">{event.title}</h4>
                 <p className="text-sm text-gray-600 mt-1">
-                  {new Date(event.start_time).toLocaleDateString()} at{' '}
-                  {new Date(event.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                  {new Date(event.start_time).toLocaleDateString(undefined, { timeZone: 'UTC' })} at{' '}
+                  {new Date(event.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', timeZone: 'UTC'})}
                 </p>
                 {event.location && (
                   <p className="text-sm text-gray-500">📍 {event.location}</p>
