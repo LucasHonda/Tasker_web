@@ -64,6 +64,10 @@ class User(BaseModel):
     session_token: str
     expires_at: datetime
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    # Google OAuth tokens for calendar access
+    google_access_token: Optional[str] = None
+    google_refresh_token: Optional[str] = None
+    google_token_expires_at: Optional[datetime] = None
 
 class UserSession(BaseModel):
     user_id: str
