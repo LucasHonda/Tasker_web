@@ -480,9 +480,8 @@ async def debug_redirect_uri(request: Request):
 async def google_calendar_auth(request: Request, current_user: UserSession = Depends(get_current_user)):
     """Initiate Google OAuth flow for calendar access"""
     try:
-        # Fix redirect URI generation to avoid double slashes
-        base_url = str(request.base_url).rstrip('/')
-        redirect_uri = f"{base_url}/api/auth/google/callback"
+        # Force HTTPS for redirect URI to match Google Cloud Console configuration
+        redirect_uri = "https://schedule-buddy-62.preview.emergentagent.com/api/auth/google/callback"
         logging.info(f"Google Calendar OAuth redirect URI: {redirect_uri}")
         return await oauth.google.authorize_redirect(request, redirect_uri)
     except Exception as e:
