@@ -907,7 +907,48 @@ const Dashboard = () => {
 
   const renderCalendar = () => (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900">Calendar</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-gray-900">Calendar</h2>
+        {calendarAuthStatus && !calendarAuthStatus.authorized && (
+          <button
+            onClick={handleCalendarAuth}
+            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
+          >
+            <Calendar className="w-4 h-4" />
+            Connect Google Calendar
+          </button>
+        )}
+      </div>
+      
+      {calendarAuthStatus && !calendarAuthStatus.authorized && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center gap-3">
+            <Calendar className="w-5 h-5 text-blue-500" />
+            <div>
+              <h4 className="font-medium text-blue-900">Connect your Google Calendar</h4>
+              <p className="text-sm text-blue-700 mt-1">
+                {calendarAuthStatus.message || 'Authorize access to see your real calendar events'}
+              </p>
+            </div>
+            <button
+              onClick={handleCalendarAuth}
+              className="ml-auto bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600 transition-colors"
+            >
+              Connect Now
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {calendarAuthStatus && calendarAuthStatus.authorized && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-green-500" />
+            <span className="text-sm text-green-700">Google Calendar connected</span>
+          </div>
+        </div>
+      )}
+      
       <CalendarView
         events={events}
         selectedDate={selectedDate}
