@@ -29,8 +29,28 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
+# Google OAuth Configuration
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
+GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
+
 # Create the main app without a prefix
 app = FastAPI(title="Calendar & Task Manager", version="1.0.0")
+
+# Add session middleware for OAuth
+app.add_middleware(SessionMiddleware, secret_key="your-secret-key-change-in-production")
+
+# OAuth setup
+oauth = OAuth()
+oauth.register(
+    name='google',
+    client_id=GOOGLE_CLIENT_ID,
+    client_secret=GOOGLE_CLIENT_SECRET,
+    authorize_url='https://accounts.google.com/o/oauth2/auth',
+    access_token_url='https://oauth2.googleapis.com/token',
+    client_kwargs={
+        'scope': 'openid email profile https://www.googleapis.com/auth/calendar.readonly'
+    }
+)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
