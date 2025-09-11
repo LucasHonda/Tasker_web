@@ -468,7 +468,10 @@ def get_mock_calendar_events(current_user, start_time, end_time, real_integratio
 async def google_calendar_auth(request: Request, current_user: UserSession = Depends(get_current_user)):
     """Initiate Google OAuth flow for calendar access"""
     try:
-        redirect_uri = f"{request.base_url}api/auth/google/callback"
+        # Fix redirect URI generation to avoid double slashes
+        base_url = str(request.base_url).rstrip('/')
+        redirect_uri = f"{base_url}/api/auth/google/callback"
+        logging.info(f"Google Calendar OAuth redirect URI: {redirect_uri}")
         return await oauth.google.authorize_redirect(request, redirect_uri)
     except Exception as e:
         logging.error(f"Google auth redirect failed: {str(e)}")
