@@ -312,6 +312,72 @@ def get_mock_calendar_events(current_user, start_time, end_time, real_integratio
     
     return filtered_events
 
+# Google Calendar OAuth Routes
+@api_router.get("/auth/google/calendar")
+async def google_calendar_auth(request: Request, current_user: UserSession = Depends(get_current_user)):
+    """Initiate Google OAuth flow for calendar access"""
+    try:
+        redirect_uri = f"{request.base_url}api/auth/google/callback"
+        return await oauth.google.authorize_redirect(request, redirect_uri)
+    except Exception as e:
+        logging.error(f"Google auth redirect failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to initiate Google authentication")
+
+@api_router.get("/auth/google/callback")
+async def google_calendar_callback(request: Request):
+    """Handle Google OAuth callback and store tokens"""
+    try:
+        token = await oauth.google.authorize_access_token(request)
+        user_info = await oauth.google.parse_id_token(request, token)
+        
+        # Get the current user from session (you'll need to implement session management)
+        # For now, we'll find user by email
+        user_email = user_info.get('email')
+        if not user_email:
+            raise HTTPException(status_code=400, detail="No email in Google response")
+        
+        # Update user with Google OAuth tokens
+        google_token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=token.get('expires_in', 3600))
+        
+        update_result = await db.users.update_one(
+            {"email": user_email},
+            {
+                "$set": {
+                    "google_access_token": token.get('access_token'),
+                    "google_refresh_token": token.get('refresh_token'),
+                    "google_token_expires_at": google_token_expires_at.isoformat()
+                }
+            }
+        )
+        
+        if update_result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Redirect back to the main app
+        return Response(
+            content="""
+            <html>
+                <body>
+                    <h2>Calendar Access Granted!</h2>
+                    <p>You can now close this window and return to the app.</p>
+                    <script>
+                        setTimeout(() => {
+                            window.close();
+                        }, 2000);
+                    </script>
+                </body>
+            </html>
+            """,
+            media_type="text/html"
+        )
+        
+    except OAuthError as e:
+        logging.error(f"OAuth error: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"OAuth error: {str(e)}")
+    except Exception as e:
+        logging.error(f"Google callback error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Authentication callback failed")
+
 # Basic Routes
 @api_router.get("/")
 async def root():
