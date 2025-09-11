@@ -203,6 +203,45 @@ backend:
         - working: true
           agent: "testing"
           comment: "GET /api/calendar/events working correctly. Returns mock calendar events with proper structure including id, title, start_time, end_time, all_day, location, calendar_id fields. Ready for future Google Calendar integration."
+        - working: true
+          agent: "testing"
+          comment: "Enhanced calendar integration tested successfully. GET /api/calendar/events now includes Google Calendar API integration attempt with fallback to enhanced mock data. User personalization working correctly with user names in event titles. Date range filtering functional."
+
+  - task: "Google Calendar Integration - Test Endpoint"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "GET /api/calendar/test-google-access working correctly. Properly tests Google Calendar API access status, handles Emergent Auth session validation, provides appropriate fallback messages. Returns structured response with status, message, and recommendations."
+
+  - task: "Google Calendar Integration - Enhanced Mock Data"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "Enhanced mock calendar data working correctly. Includes user personalization with user names in event titles, proper date range filtering, and comprehensive event structure. Successfully transitions from attempting real Google Calendar API to fallback mock data."
+
+  - task: "Google Calendar Integration - Authentication & Error Handling"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "testing"
+          comment: "Calendar endpoints properly secured with authentication. All calendar endpoints (/api/calendar/test-google-access, /api/calendar/events) correctly require authentication and return 401 for unauthenticated requests. Error handling working properly for invalid tokens."
 
   - task: "Dashboard Summary"
     implemented: true
