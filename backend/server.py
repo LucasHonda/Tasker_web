@@ -473,7 +473,7 @@ async def debug_redirect_uri(request: Request):
         "base_url": str(request.base_url),
         "cleaned_base_url": base_url,
         "redirect_uri": redirect_uri,
-        "expected_uri": "https://schedule-buddy-62.preview.emergentagent.com/api/auth/google/callback"
+        "expected_uri": f"{base_url}/api/auth/google/callback"
     }
 
 @api_router.get("/auth/google/calendar")
@@ -481,7 +481,7 @@ async def google_calendar_auth(request: Request, current_user: UserSession = Dep
     """Initiate Google OAuth flow for calendar access"""
     try:
         # Force HTTPS for redirect URI to match Google Cloud Console configuration
-        redirect_uri = "https://schedule-buddy-62.preview.emergentagent.com/api/auth/google/callback"
+        redirect_uri = f"{base_url}/api/auth/google/callback"
         logging.info(f"Google Calendar OAuth redirect URI: {redirect_uri}")
         return await oauth.google.authorize_redirect(request, redirect_uri)
     except Exception as e:
@@ -508,7 +508,7 @@ async def google_calendar_callback(request: Request):
                     "client_secret": GOOGLE_CLIENT_SECRET,
                     "code": code,
                     "grant_type": "authorization_code",
-                    "redirect_uri": "https://schedule-buddy-62.preview.emergentagent.com/api/auth/google/callback"
+                    "redirect_uri": f"{base_url}/api/auth/google/callback"
                 },
                 headers={"Content-Type": "application/x-www-form-urlencoded"}
             )
